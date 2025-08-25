@@ -2,27 +2,66 @@
 {% block content %}
 <div class="grid">
   <div class="card">
-    <h3>Facilitator</h3>
-    <form method="post" action="{{ url_for('facilitator') }}">
-      <label><input type="checkbox" name="shuffle" {% if cfg.shuffle %}checked{% endif %}/> Shuffle challenge order per team</label><br/>
-      <label><input type="checkbox" name="hints" {% if cfg.hints %}checked{% endif %}/> Show hints to teams</label><br/>
-      <div style="display:flex;gap:8px;margin-top:8px;">
-        <button class="btn" name="action" value="save">Save Settings</button>
-        <button class="btn secondary" name="action" value="reset_solved">Reset Solved (all teams)</button>
-        <button class="btn danger" name="action" value="reset_all" onclick="return confirm('Reset EVERYTHING? Scores and settings will be cleared.')">Full Reset</button>
+    <h3>Facilitator Controls</h3>
+    <form method="post">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn" name="action" value="prev">◀ Prev</button>
+        <button class="btn" name="action" value="next">Next ▶</button>
+        <button class="btn warn" name="action" value="reveal">Reveal & Score</button>
+        <button class="btn secondary" name="action" value="shuffle">Shuffle Questions</button>
       </div>
+      <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        <label><input type="checkbox" name="neg" {% if state.neg_mark %}checked{% endif %}/> Negative marking (-0.5 wrong)</label>
+        <label>Timer (seconds): <input type="number" name="timer" value="{{ state.timer_secs }}" min="0" style="width:90px"/></label>
+        <button class="btn secondary" name="action" value="start_timer">Set Timer</button>
+        {% if state.deadline %}<span class="badge">Timer ends at {{ state.deadline|int }}</span>{% endif %}
+      </div>
+      {% if admin_required %}
+      <div class="card" style="margin-top:10px">
+        <p class="small">An admin token is required for reset actions. Ask the facilitator for the token.</p>
+        <label>Admin token: <input type="text" name="admin_token" placeholder="Enter token"/></label>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button class="btn danger" name="action" value="reset_round">Reset Round</button>
+          <button class="btn danger" name="action" value="reset_all" onclick="return confirm('Full reset (scores + state)?')">Full Reset</button>
+        </div>
+      </div>
+      {% else %}
+      <div class="card" style="margin-top:10px">
+        <div style="display:flex;gap:8px;">
+          <button class="btn danger" name="action" value="reset_round">Reset Round</button>
+          <button class="btn danger" name="action" value="reset_all" onclick="return confirm('Full reset (scores + state)?')">Full Reset</button>
+        </div>
+        <p class="small">Resets are allowed from localhost only when no admin token is set.</p>
+      </div>
+      {% endif %}
     </form>
   </div>
   <div class="card">
-    <h3>Live Scores</h3>
+    <h3>Round</h3>
+    <p>Question {{ state.qidx+1 }} / {{ total }}</p>
+    {% if q %}
+      <p><strong>{{ q.text }}</strong> <span class="badge">{{ q.topic }}</span><span class="badge">{{ q.difficulty }}</span></p>
+      {% if q.kind != "short" %}
+      <ul class="small">
+        {% for c in q.choices %}<li>{{ loop.index0 }} — {{ c }}</li>{% endfor %}
+      </ul>
+      {% endif %}
+      <p class="small"><strong>Answer:</strong> {{ answer_human }}</p>
+      <p class="small">{{ q.explanation }}</p>
+    {% else %}
+      <p>No question selected.</p>
+    {% endif %}
+  </div>
+  <div class="card">
+    <h3>Submissions (current question)</h3>
     <table>
-      <tr><th>Team</th><th>Points</th><th>Progress</th></tr>
-      {% for row in board %}
-      <tr>
-        <td><a href="{{ url_for('team_detail', team_id=row.team.id) }}">{{ row.team.name }}</a></td>
-        <td><strong>{{ row.points }}</strong></td>
-        <td>{{ row.solved }}/{{ total }}</td>
-      </tr>
+      <tr><th>Team</th><th>Answer</th><th>Status</th></tr>
+      {% for r in subs %}
+        <tr>
+          <td>{{ r.team.name }}</td>
+          <td>{{ r.answer }}</td>
+          <td>{% if r.correct is none %}—{% elif r.correct %}<span class="success">✔</span>{% else %}<span class="error">✘</span>{% endif %}</td>
+        </tr>
       {% endfor %}
     </table>
   </div>

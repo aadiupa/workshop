@@ -2,25 +2,23 @@
 {% block content %}
 <div class="grid">
   <div class="card">
-    <h3>Scoreboard</h3>
+    <h3>Leaderboard</h3>
     <table>
-      <tr><th>Team</th><th>Points</th><th>Progress</th><th>Last Solve</th></tr>
-      {% for row in board %}
-      <tr>
-        <td><a href="{{ url_for('team_detail', team_id=row.team.id) }}">{{ row.team.name }}</a></td>
-        <td><strong>{{ row.points }}</strong> / {{ total }}</td>
-        <td>{{ row.solved }}/{{ total }}</td>
-        <td class="small">{{ row.last_solve or "—" }}</td>
-      </tr>
+      <tr><th>Team</th><th>Points</th><th>Answered</th><th>Correct</th></tr>
+      {% for r in board %}
+        <tr>
+          <td><a href="{{ url_for('team_page', team_id=r.team.id) }}">{{ r.team.name }}</a></td>
+          <td><strong>{{ r.points }}</strong></td>
+          <td>{{ r.answered }}</td>
+          <td>{{ r.correct }}</td>
+        </tr>
       {% endfor %}
     </table>
   </div>
   <div class="card">
-    <h3>How it works</h3>
-    <p>Pick your team, open a challenge, and submit a JSON patch representing your fix (e.g., a Service selector, a liveness probe). We validate intent — not exact formatting.</p>
-    <p class="small">Example payload:</p>
-    <pre><code>{"kind":"Service","spec":{"selector":{"app":"web"}}}</code></pre>
-    <p class="small">Tip: Use <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>Enter</kbd> to submit.</p>
+    <h3>How to play</h3>
+    <p>Facilitator controls the round. Teams answer on their devices from their team page. On reveal, correct answers and explanations are shown, and scores update.</p>
+    <p class="small">Question types: single-choice, multi-select, and short text (regex).</p>
   </div>
 </div>
 {% endblock %}
