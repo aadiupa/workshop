@@ -4,24 +4,64 @@
   <div class="card">
     <h3>Team: {{ team.name }}</h3>
     <p class="small">Share this page URL with your teammates.</p>
-    <table>
-      <tr><th>#</th><th>Challenge</th><th>Status</th></tr>
-      {% for c in challenges %}
-      <tr>
-        <td>{{ loop.index }}</td>
-        <td><a href="{{ url_for('challenge_detail', team_id=team.id, challenge_id=c.id) }}">{{ c.title }}</a></td>
-        <td>{% if c.id in solved %}<span class="success">Solved</span>{% else %}<span class="error">Broken</span>{% endif %}</td>
-      </tr>
-      {% endfor %}
-    </table>
+    <p>Current question: <strong>#{{ qidx+1 }}</strong> / {{ total }} {% if deadline %}<span class="badge timer" id="timer"></span>{% endif %}</p>
+    {% if q %}
+      <div class="card" style="margin-top:10px">
+        <div><strong>{{ q.text }}</strong> <span class="badge">{{ q.topic }}</span><span class="badge">{{ q.difficulty }}</span></div>
+        {% if q.kind in ["single","multi"] %}
+          <form method="post" action="{{ url_for('submit_answer', team_id=team.id) }}">
+            {% for i, c in enumerate(q.choices) %}
+              {% if q.kind == "single" %}
+                <label class="choice"><input type="radio" name="choice" value="{{ i }}" {% if current and current.choice == i %}checked{% endif %}/> {{ c }}</label>
+              {% else %}
+                <label class="choice"><input type="checkbox" name="choices" value="{{ i }}" {% if current and i in (current.choices or []) %}checked{% endif %}/> {{ c }}</label>
+              {% endif %}
+            {% endfor %}
+            <div style="display:flex;gap:8px;margin-top:8px;">
+              <button class="btn" type="submit">Submit</button>
+              <a class="btn secondary" href="{{ url_for('team_page', team_id=team.id) }}">Refresh</a>
+            </div>
+          </form>
+        {% elif q.kind == "short" %}
+          <form method="post" action="{{ url_for('submit_answer', team_id=team.id) }}">
+            <input type="text" name="text" placeholder="Your answer…" value="{{ current.text if current else '' }}"/>
+            <div style="display:flex;gap:8px;margin-top:8px;">
+              <button class="btn" type="submit">Submit</button>
+              <a class="btn secondary" href="{{ url_for('team_page', team_id=team.id) }}">Refresh</a>
+            </div>
+          </form>
+        {% endif %}
+        {% if revealed %}
+          <p class="small" style="margin-top:8px"><strong>Answer:</strong> {{ answer_human }}</p>
+          <p class="small">{{ q.explanation }}</p>
+        {% endif %}
+        {% if msg %}<p class="success">{{ msg }}</p>{% endif %}
+      </div>
+    {% else %}
+      <p>No question loaded yet. Ask the facilitator to start the round.</p>
+    {% endif %}
   </div>
   <div class="card">
-    <h3>Tips</h3>
+    <h3>Round Status</h3>
     <ul>
-      <li>We only check the parts that matter; extra fields are ignored.</li>
-      <li>JSON only (no YAML). If you need help, copy the hint and edit it.</li>
-      <li>Take turns. Talk through your fix before you submit.</li>
+      <li>Submitted: {{ submitted }}</li>
+      <li>Revealed: {{ "Yes" if revealed else "No" }}</li>
     </ul>
   </div>
 </div>
+{% if deadline %}
+<script>
+function updateTimer() {
+  const el = document.getElementById('timer');
+  if (!el) return;
+  const end = {{ int(deadline) }} * 1000;
+  const now = Date.now();
+  let s = Math.max(0, Math.floor((end - now)/1000));
+  const m = Math.floor(s/60); s = s%60;
+  el.textContent = "⏱ " + m + ":" + (s<10 ? "0"+s : s);
+  if (end - now > 0) requestAnimationFrame(updateTimer);
+}
+updateTimer();
+</script>
+{% endif %}
 {% endblock %}

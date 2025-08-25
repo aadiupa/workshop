@@ -1,0 +1,530 @@
+[
+  {
+    "id": "k8s-req-lim",
+    "kind": "single",
+    "text": "In Kubernetes scheduling, which statement is TRUE?",
+    "topic": "Kubernetes",
+    "difficulty": "Medium",
+    "choices": [
+      "A pod is scheduled only if its limits fit on a node; requests are ignored",
+      "A pod is scheduled if its requests fit; limits are enforced at runtime",
+      "Requests and limits are only used by the HPA, not the scheduler",
+      "The scheduler uses limits; the kubelet uses requests"
+    ],
+    "answer": 1,
+    "explanation": "The scheduler places pods based on resource requests. Limits are enforced by the kubelet/CRI during runtime throttling."
+  },
+  {
+    "id": "k8s-pdb",
+    "kind": "single",
+    "text": "A PodDisruptionBudget with minAvailable=2 and 3 replicas currently Running. How many pods can a voluntary disruption evict at once?",
+    "topic": "Kubernetes",
+    "difficulty": "Medium",
+    "choices": [
+      "0",
+      "1",
+      "2",
+      "3"
+    ],
+    "answer": 1,
+    "explanation": "minAvailable=2 means at least 2 must stay; with 3 replicas, only 1 eviction is allowed at a time."
+  },
+  {
+    "id": "k8s-svc-type",
+    "kind": "multi",
+    "text": "Which Service types can directly allocate a cloud load balancer in managed clusters (typical AWS/GCP/Azure integrations)?",
+    "topic": "Kubernetes",
+    "difficulty": "Medium",
+    "choices": [
+      "ClusterIP",
+      "NodePort",
+      "LoadBalancer",
+      "ExternalName"
+    ],
+    "answer": [
+      2
+    ],
+    "explanation": "Only LoadBalancer provisions a cloud LB. NodePort exposes on nodes, ClusterIP is internal, ExternalName is DNS alias."
+  },
+  {
+    "id": "k8s-np-egress",
+    "kind": "single",
+    "text": "By default, NetworkPolicies in Kubernetes\u2026",
+    "topic": "Kubernetes",
+    "difficulty": "Medium",
+    "choices": [
+      "Deny all ingress and egress cluster-wide",
+      "Are deny-all and require explicit allow rules",
+      "Are additive allow lists; traffic not selected remains allowed",
+      "Only control egress; ingress is unmanaged"
+    ],
+    "answer": 2,
+    "explanation": "NetworkPolicies are additive. They only affect selected pods; traffic not matched remains allowed unless a policy selects those pods."
+  },
+  {
+    "id": "k8s-hpa",
+    "kind": "single",
+    "text": "The HorizontalPodAutoscaler v2 scales primarily based on\u2026",
+    "topic": "Kubernetes",
+    "difficulty": "Medium",
+    "choices": [
+      "Pod limits",
+      "Pod requests",
+      "Metrics from Resource/Custom/External metrics APIs",
+      "Scheduler backlog"
+    ],
+    "answer": 2,
+    "explanation": "HPA v2 can use resource metrics (CPU/memory), custom metrics, and external metrics via Metrics API servers."
+  },
+  {
+    "id": "k8s-kubeproxy",
+    "kind": "single",
+    "text": "In iptables mode, kube-proxy primarily programs\u2026",
+    "topic": "Kubernetes",
+    "difficulty": "Medium",
+    "choices": [
+      "DNAT and filter chains for Services and Endpoints",
+      "IPVS connection tables only",
+      "Userspace proxies",
+      "eBPF programs replacing iptables"
+    ],
+    "answer": 0,
+    "explanation": "kube-proxy in iptables mode writes DNAT rules for Service VIPs and cluster IP routing."
+  },
+  {
+    "id": "k8s-spc-rotate",
+    "kind": "short",
+    "text": "Name one method to force pods to pick up updated mounted secrets/configs when using CSI drivers.",
+    "topic": "Kubernetes",
+    "difficulty": "Hard",
+    "answer": [
+      "rollout\\\\s+restart",
+      "delete\\\\s+pod",
+      "recreate",
+      "bump\\\\s+annotation",
+      "kubectl\\\\s+rollout\\\\s+restart"
+    ],
+    "explanation": "Typical approaches: `kubectl rollout restart`, deployment annotation bump, or pod recreation."
+  },
+  {
+    "id": "k8s-karpenter",
+    "kind": "single",
+    "text": "Karpenter differs from Cluster Autoscaler primarily by\u2026",
+    "topic": "Kubernetes",
+    "difficulty": "Medium",
+    "choices": [
+      "Controlling replica counts directly",
+      "Provisioning nodes based on pending pods and flexible instance types",
+      "Replacing the kube-scheduler",
+      "Only working on on-prem clusters"
+    ],
+    "answer": 1,
+    "explanation": "Karpenter provisions nodes on demand to fit pending pods with flexible instance types and constraints."
+  },
+  {
+    "id": "ctr-userns",
+    "kind": "single",
+    "text": "Rootless containers achieve isolation primarily by\u2026",
+    "topic": "Containers",
+    "difficulty": "Medium",
+    "choices": [
+      "Dropping capabilities only",
+      "User namespaces remapping uid 0 to an unprivileged host uid",
+      "Seccomp profiles",
+      "Read-only rootfs"
+    ],
+    "answer": 1,
+    "explanation": "Rootless relies on user namespaces; other hardening helps but isn\u2019t the core mechanism."
+  },
+  {
+    "id": "ctr-layer",
+    "kind": "single",
+    "text": "On OverlayFS, which action creates a new image layer during a Docker build?",
+    "topic": "Containers",
+    "difficulty": "Medium",
+    "choices": [
+      "Writing to a mounted volume at runtime",
+      "Each RUN/COPY/ADD in the Dockerfile",
+      "Changing a file at runtime inside the container",
+      "Modifying an env var with docker run"
+    ],
+    "answer": 1,
+    "explanation": "Each build instruction (except some metadata ops) commits a new layer."
+  },
+  {
+    "id": "linux-cgroups",
+    "kind": "multi",
+    "text": "Which are cgroups v2 controllers?",
+    "topic": "Linux",
+    "difficulty": "Hard",
+    "choices": [
+      "cpu",
+      "cpuset",
+      "pids",
+      "hugetlb",
+      "memcg"
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "explanation": "cgroups v2 exposes unified controllers: cpu, cpuset, pids, hugetlb, memory (memcg)."
+  },
+  {
+    "id": "linux-ns",
+    "kind": "multi",
+    "text": "Pick valid Linux namespaces:",
+    "topic": "Linux",
+    "difficulty": "Medium",
+    "choices": [
+      "mnt",
+      "uts",
+      "user",
+      "proc",
+      "time"
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "explanation": "Valid namespaces include mnt, uts, user, ipc, pid, net, cgroup, time. 'proc' is a filesystem."
+  },
+  {
+    "id": "net-tcp-handshake",
+    "kind": "single",
+    "text": "Which order correctly represents the TCP three-way handshake?",
+    "topic": "Networking",
+    "difficulty": "Easy",
+    "choices": [
+      "SYN \u2192 FIN \u2192 ACK",
+      "SYN \u2192 SYN/ACK \u2192 ACK",
+      "ACK \u2192 SYN \u2192 SYN/ACK",
+      "SYN/ACK \u2192 SYN \u2192 ACK"
+    ],
+    "answer": 1,
+    "explanation": "Client sends SYN, server replies SYN/ACK, client responds ACK."
+  },
+  {
+    "id": "net-mtu",
+    "kind": "single",
+    "text": "Reducing MTU on a path most directly mitigates\u2026",
+    "topic": "Networking",
+    "difficulty": "Medium",
+    "choices": [
+      "Bufferbloat",
+      "Fragmentation/PMTU blackholes",
+      "DNS cache poisoning",
+      "Slow start"
+    ],
+    "answer": 1,
+    "explanation": "Lower MTU can avoid fragmentation and PMTU issues on unreliable links/tunnels."
+  },
+  {
+    "id": "net-lb",
+    "kind": "single",
+    "text": "On AWS, which statement about NLB vs ALB is TRUE?",
+    "topic": "Cloud/AWS",
+    "difficulty": "Medium",
+    "choices": [
+      "ALB supports Layer 4 only; NLB supports Layer 7",
+      "NLB preserves source IP; ALB typically doesn\u2019t",
+      "NLB terminates TLS; ALB cannot",
+      "ALB has no health checks"
+    ],
+    "answer": 1,
+    "explanation": "NLB is L4 and preserves client IP. ALB is L7, source IP visible via X-Forwarded-For."
+  },
+  {
+    "id": "aws-s3-consistency",
+    "kind": "single",
+    "text": "As of 2020+, Amazon S3 provides what consistency model for new PUTs and overwrite PUTs?",
+    "topic": "Cloud/AWS",
+    "difficulty": "Medium",
+    "choices": [
+      "Eventual for all operations",
+      "Read-after-write for new objects; eventual for overwrites",
+      "Strong read-after-write for new and overwrite PUTs in all regions",
+      "Strong only in us-east-1"
+    ],
+    "answer": 2,
+    "explanation": "S3 now offers strong read-after-write consistency for all operations globally."
+  },
+  {
+    "id": "aws-iam-role",
+    "kind": "single",
+    "text": "An EC2 instance assumes permissions for AWS APIs via\u2026",
+    "topic": "Cloud/AWS",
+    "difficulty": "Easy",
+    "choices": [
+      "Access keys in /root/.aws",
+      "Instance Profile (IAM Role) attached to the instance",
+      "User data script exporting AWS_* vars",
+      "STS federation from Route53"
+    ],
+    "answer": 1,
+    "explanation": "The instance profile is the canonical way to provide credentials to EC2."
+  },
+  {
+    "id": "aws-kms-envelope",
+    "kind": "short",
+    "text": "What\u2019s the term for encrypting data with a data key that\u2019s itself encrypted with a CMK?",
+    "topic": "Security",
+    "difficulty": "Medium",
+    "answer": [
+      "envelope\\\\s+encryption"
+    ],
+    "explanation": "Envelope encryption: data key encrypts data; data key is encrypted with a CMK."
+  },
+  {
+    "id": "sec-jwt",
+    "kind": "multi",
+    "text": "Pick all valid parts of a JWT:",
+    "topic": "Security",
+    "difficulty": "Easy",
+    "choices": [
+      "Header",
+      "Signature",
+      "Checksum",
+      "Payload (claims)"
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "explanation": "JWT = header, payload, signature (not checksum)."
+  },
+  {
+    "id": "sec-oauth2",
+    "kind": "single",
+    "text": "Which OAuth2 flow is recommended for SPAs (public clients) today?",
+    "topic": "Security",
+    "difficulty": "Medium",
+    "choices": [
+      "Implicit Grant",
+      "Resource Owner Password",
+      "Authorization Code with PKCE",
+      "Client Credentials"
+    ],
+    "answer": 2,
+    "explanation": "Auth Code with PKCE is the modern choice for SPAs/public clients."
+  },
+  {
+    "id": "sec-mtls",
+    "kind": "single",
+    "text": "Mutual TLS primarily adds\u2026",
+    "topic": "Security",
+    "difficulty": "Medium",
+    "choices": [
+      "Server-only authentication",
+      "Client authentication using certificates",
+      "Token-based auth",
+      "Perfect forward secrecy by default"
+    ],
+    "answer": 1,
+    "explanation": "mTLS adds client cert authentication in addition to server auth."
+  },
+  {
+    "id": "db-pg-isolation",
+    "kind": "single",
+    "text": "PostgreSQL\u2019s default isolation level is\u2026",
+    "topic": "Databases",
+    "difficulty": "Medium",
+    "choices": [
+      "READ UNCOMMITTED",
+      "READ COMMITTED",
+      "REPEATABLE READ",
+      "SERIALIZABLE"
+    ],
+    "answer": 1,
+    "explanation": "Default is READ COMMITTED; REPEATABLE READ and SERIALIZABLE are available."
+  },
+  {
+    "id": "db-index",
+    "kind": "single",
+    "text": "Which index type is the general default for range queries in most RDBMS?",
+    "topic": "Databases",
+    "difficulty": "Easy",
+    "choices": [
+      "B-Tree",
+      "Hash",
+      "GiST",
+      "Bitmap"
+    ],
+    "answer": 0,
+    "explanation": "B-Tree indexes handle range queries efficiently."
+  },
+  {
+    "id": "db-mvcc",
+    "kind": "single",
+    "text": "MVCC primarily helps with\u2026",
+    "topic": "Databases",
+    "difficulty": "Medium",
+    "choices": [
+      "Sharding tables",
+      "Concurrent readers without blocking writers",
+      "Faster full-table scans",
+      "Compression of WAL"
+    ],
+    "answer": 1,
+    "explanation": "MVCC gives snapshot isolation: readers don\u2019t block writers."
+  },
+  {
+    "id": "obs-red",
+    "kind": "single",
+    "text": "The RED method focuses on\u2026",
+    "topic": "Observability",
+    "difficulty": "Easy",
+    "choices": [
+      "Resources, Errors, Downtime",
+      "Rate, Errors, Duration",
+      "Reads, Evictions, Disk",
+      "Retries, Exceptions, Drops"
+    ],
+    "answer": 1,
+    "explanation": "RED: Rate, Errors, Duration for request-driven systems."
+  },
+  {
+    "id": "obs-hist-quantile",
+    "kind": "single",
+    "text": "How does Prometheus compute a 99th percentile from Histograms?",
+    "topic": "Observability",
+    "difficulty": "Hard",
+    "choices": [
+      "Exact percentile from raw samples",
+      "Approximation using bucket counts and interpolation",
+      "Median-of-medians over counters",
+      "Client-side reservoir sampling"
+    ],
+    "answer": 1,
+    "explanation": "Prometheus uses histogram buckets and interpolates quantiles (approximate)."
+  },
+  {
+    "id": "obs-logs-card",
+    "kind": "single",
+    "text": "A common cause of high-cost log pipelines is\u2026",
+    "topic": "Observability",
+    "difficulty": "Easy",
+    "choices": [
+      "Lowering retention",
+      "High label cardinality or unbounded keys",
+      "Batching logs",
+      "Using JSON lines"
+    ],
+    "answer": 1,
+    "explanation": "High cardinality (e.g., per-user IDs as labels) explodes indexes and cost."
+  },
+  {
+    "id": "git-rebase",
+    "kind": "single",
+    "text": "`git rebase main` on a feature branch does what?",
+    "topic": "Git",
+    "difficulty": "Medium",
+    "choices": [
+      "Merges main into feature with a merge commit",
+      "Rewrites feature commits on top of main\u2019s tip",
+      "Resets feature to main, discarding commits",
+      "Only fast-forwards feature"
+    ],
+    "answer": 1,
+    "explanation": "Rebase replays your branch commits on top of main, creating new commit IDs."
+  },
+  {
+    "id": "git-reset",
+    "kind": "multi",
+    "text": "Match reset modes to index/working tree effects (pick all that change the working tree):",
+    "topic": "Git",
+    "difficulty": "Hard",
+    "choices": [
+      "--soft",
+      "--mixed",
+      "--hard",
+      "--merge"
+    ],
+    "answer": [
+      2,
+      3
+    ],
+    "explanation": "--soft keeps index/worktree; --mixed resets index; --hard and --merge can change worktree."
+  },
+  {
+    "id": "algo-big-o",
+    "kind": "single",
+    "text": "What is the time complexity of binary search on a sorted array?",
+    "topic": "Algorithms",
+    "difficulty": "Easy",
+    "choices": [
+      "O(1)",
+      "O(log n)",
+      "O(n)",
+      "O(n log n)"
+    ],
+    "answer": 1,
+    "explanation": "Binary search halves the search space each step \u2192 O(log n)."
+  },
+  {
+    "id": "sys-backpressure",
+    "kind": "single",
+    "text": "Backpressure in streaming systems is primarily about\u2026",
+    "topic": "Systems",
+    "difficulty": "Medium",
+    "choices": [
+      "Increasing queue sizes",
+      "Slowing or pausing producers when consumers lag",
+      "Dropping messages at the broker",
+      "Retrying failed events"
+    ],
+    "answer": 1,
+    "explanation": "Backpressure propagates demand upstream to prevent overload."
+  },
+  {
+    "id": "llm-temp",
+    "kind": "single",
+    "text": "Increasing temperature in decoding generally\u2026",
+    "topic": "AI/LLMs",
+    "difficulty": "Easy",
+    "choices": [
+      "Makes outputs more deterministic",
+      "Promotes more diverse token sampling",
+      "Decreases top-p",
+      "Improves factual accuracy"
+    ],
+    "answer": 1,
+    "explanation": "Higher temperature increases randomness/diversity of sampling."
+  },
+  {
+    "id": "llm-kv",
+    "kind": "single",
+    "text": "KV cache in transformer inference primarily\u2026",
+    "topic": "AI/LLMs",
+    "difficulty": "Medium",
+    "choices": [
+      "Stores token logits",
+      "Caches key/value tensors to avoid recomputing attention for past tokens",
+      "Caches embeddings for the prompt only",
+      "Is the same as LoRA adapters"
+    ],
+    "answer": 1,
+    "explanation": "KV cache avoids recomputation by storing past attention keys/values."
+  },
+  {
+    "id": "llm-lora",
+    "kind": "single",
+    "text": "LoRA fine-tuning works by\u2026",
+    "topic": "AI/LLMs",
+    "difficulty": "Medium",
+    "choices": [
+      "Training the full model end-to-end",
+      "Adding small low-rank adapters to selected layers",
+      "Pruning neurons with low activation",
+      "Distilling to a smaller model"
+    ],
+    "answer": 1,
+    "explanation": "LoRA inserts trainable low-rank matrices, keeping base weights frozen."
+  }
+]

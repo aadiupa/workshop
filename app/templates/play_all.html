@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h3>Everyone Play Link</h3>
+  <p>Share this page if you want a single “audience mode” (not team-specific). It shows the current question and allows a quick practice submission (not scored).</p>
+  {% if q %}
+    <p><strong>Q{{ qidx+1 }}:</strong> {{ q.text }} <span class="badge">{{ q.topic }}</span> <span class="badge">{{ q.difficulty }}</span></p>
+    {% if q.kind in ["single","multi"] %}
+      <ul>{% for c in q.choices %}<li>{{ c }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% if revealed %}
+      <p class="small"><strong>Answer:</strong> {{ answer_human }}</p>
+      <p class="small">{{ q.explanation }}</p>
+    {% else %}
+      <p class="small">Waiting for reveal…</p>
+    {% endif %}
+  {% else %}
+    <p>No question yet. Facilitator needs to start the round.</p>
+  {% endif %}
+</div>
+{% endblock %}

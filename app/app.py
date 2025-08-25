@@ -1,311 +1,352 @@
 
 from __future__ import annotations
-import json, os, time, uuid, threading
+import os, json, time, threading, re
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional, Any
-from flask import Flask, render_template, request, redirect, url_for, abort
+from flask import Flask, render_template, request, redirect, url_for, abort, make_response
 
 APP = Flask(__name__)
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 os.makedirs(DATA_DIR, exist_ok=True)
-
 STATE_FILE = os.path.join(DATA_DIR, "state.json")
+QUESTIONS_FILE = os.path.join(os.path.dirname(__file__), "questions.json")
 
-# ------------------ Models ------------------
+ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN")  # optional
+
+# ---------------- Models ----------------
 @dataclass
 class Team:
     id: str
     name: str
 
 @dataclass
-class Challenge:
+class Question:
     id: str
-    title: str
-    description: str
-    hint: str
-    checks: List[str]
+    kind: str  # "single" | "multi" | "short"
+    text: str
+    topic: str
+    difficulty: str
+    choices: List[str] = field(default_factory=list)
+    answer: Any = None  # single: int; multi: List[int]; short: List[str] (regex)
+    explanation: str = ""
 
 @dataclass
-class Config:
-    shuffle: bool = True
-    hints: bool = True
+class Answer:
+    choice: Optional[int] = None
+    choices: Optional[List[int]] = None
+    text: Optional[str] = None
+    correct: Optional[bool] = None
 
 @dataclass
-class State:
+class RoundState:
+    qidx: int = 0
+    revealed: bool = False
+    neg_mark: bool = False
+    timer_secs: int = 60
+    deadline: Optional[float] = None  # epoch seconds
+    submissions: Dict[str, Dict[int, Answer]] = field(default_factory=dict)
+    scores: Dict[str, float] = field(default_factory=dict)
+
+@dataclass
+class RootState:
     teams: Dict[str, Team] = field(default_factory=dict)
-    challenges: Dict[str, Challenge] = field(default_factory=dict)
-    solved: Dict[str, List[str]] = field(default_factory=dict)  # team_id -> [challenge_id]
-    solves_ts: Dict[str, float] = field(default_factory=dict)   # team_id -> last solve ts
-    cfg: Config = field(default_factory=Config)
+    questions: List[Question] = field(default_factory=list)
+    rnd: RoundState = field(default_factory=RoundState)
 
     def to_json(self) -> dict:
         return {
-            "teams": {k: asdict(v) for k, v in self.teams.items()},
-            "challenges": {k: asdict(v) for k, v in self.challenges.items()},
-            "solved": self.solved,
-            "solves_ts": self.solves_ts,
-            "cfg": asdict(self.cfg),
+            "teams": {k: asdict(v) for k,v in self.teams.items()},
+            "questions": [asdict(q) for q in self.questions],
+            "rnd": {
+                "qidx": self.rnd.qidx,
+                "revealed": self.rnd.revealed,
+                "neg_mark": self.rnd.neg_mark,
+                "timer_secs": self.rnd.timer_secs,
+                "deadline": self.rnd.deadline,
+                "submissions": {tid: {str(i): asdict(ans) for i, ans in qs.items()} for tid, qs in self.rnd.submissions.items()},
+                "scores": self.rnd.scores,
+            }
         }
 
     @staticmethod
-    def from_json(d: dict) -> "State":
-        st = State()
+    def from_json(d: dict) -> "RootState":
+        st = RootState()
         st.teams = {k: Team(**v) for k, v in d.get("teams", {}).items()}
-        st.challenges = {k: Challenge(**v) for k, v in d.get("challenges", {}).items()}
-        st.solved = d.get("solved", {})
-        st.solves_ts = d.get("solves_ts", {})
-        cfgd = d.get("cfg", {})
-        st.cfg = Config(**cfgd) if cfgd else Config()
+        st.questions = [Question(**q) for q in d.get("questions", [])]
+        rnd = d.get("rnd", {})
+        rs = RoundState(
+            qidx = rnd.get("qidx", 0),
+            revealed = rnd.get("revealed", False),
+            neg_mark = rnd.get("neg_mark", False),
+            timer_secs = rnd.get("timer_secs", 60),
+            deadline = rnd.get("deadline"),
+            submissions = {tid: {int(i): Answer(**ans) for i, ans in qs.items()} for tid, qs in rnd.get("submissions", {}).items()},
+            scores = rnd.get("scores", {}),
+        )
+        st.rnd = rs
         return st
 
 LOCK = threading.Lock()
-STATE: Optional[State] = None
+STATE: Optional[RootState] = None
 
-# --------------- Challenge Validators ---------------
-def expect_service_selector(payload: dict) -> Optional[str]:
-    try:
-        if payload.get("kind") != "Service":
-            return "We expected kind=Service."
-        sel = payload.get("spec", {}).get("selector", {})
-        if sel.get("app") == "web":
-            return None
-        return "Selector must include app=web."
-    except Exception as e:
-        return f"Bad payload: {e}"
+# ---------------- Helpers ----------------
+def load_questions() -> List[Question]:
+    with open(QUESTIONS_FILE, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return [Question(**q) for q in data]
 
-def expect_configmap_key(payload: dict) -> Optional[str]:
-    if payload.get("kind") != "ConfigMap":
-        return "We expected kind=ConfigMap."
-    data = payload.get("data", {})
-    if isinstance(data, dict) and data.get("WELCOME") and str(data.get("WELCOME")).strip():
-        return None
-    return "Provide data.WELCOME with a non-empty value."
-
-def expect_liveness_root(payload: dict) -> Optional[str]:
-    if payload.get("kind") != "Deployment":
-        return "We expected kind=Deployment."
-    try:
-        tpl = payload["spec"]["template"]["spec"]
-        containers = tpl["containers"]
-        found = False
-        for c in containers:
-            if c.get("name") == "web":
-                lp = c.get("livenessProbe", {}).get("httpGet", {}).get("path")
-                if lp == "/":
-                    found = True
-        return None if found else 'Set containers[name=web].livenessProbe.httpGet.path="/"'
-    except Exception:
-        return 'Set containers[name=web].livenessProbe.httpGet.path="/"'
-
-def expect_memory_limit(payload: dict) -> Optional[str]:
-    if payload.get("kind") != "Deployment":
-        return "We expected kind=Deployment."
-    try:
-        containers = payload["spec"]["template"]["spec"]["containers"]
-        ok = False
-        for c in containers:
-            if c.get("name") == "web":
-                limits = c.get("resources", {}).get("limits", {})
-                mem = limits.get("memory")
-                if isinstance(mem, str) and mem.lower().endswith("mi"):
-                    try:
-                        val = int(mem[:-2])
-                        if val >= 128:
-                            ok = True
-                    except:  # noqa
-                        pass
-        return None if ok else "Increase resources.limits.memory for container web to >= 128Mi."
-    except Exception:
-        return "Increase resources.limits.memory for container web to >= 128Mi."
-
-def expect_valid_image(payload: dict) -> Optional[str]:
-    if payload.get("kind") != "Deployment":
-        return "We expected kind=Deployment."
-    try:
-        containers = payload["spec"]["template"]["spec"]["containers"]
-        ok = False
-        for c in containers:
-            if c.get("name") == "web":
-                image = c.get("image", "")
-                if image in ("ealen/echo-server:latest", "ealen/echo-server:0.6.0", "ealen/echo-server:0.7.0"):
-                    ok = True
-        return None if ok else 'Set container "web" image to a valid echo server tag, e.g., "ealen/echo-server:latest".'
-    except Exception:
-        return 'Set container "web" image to a valid echo server tag, e.g., "ealen/echo-server:latest".'
-
-def expect_np_ingress(payload: dict) -> Optional[str]:
-    if payload.get("kind") != "NetworkPolicy":
-        return "We expected kind=NetworkPolicy."
-    try:
-        spec = payload["spec"]
-        pod_sel = spec.get("podSelector", {}).get("matchLabels", {})
-        if pod_sel.get("app") != "web":
-            return 'podSelector.matchLabels.app must be "web".'
-        ingress = spec.get("ingress")
-        if not isinstance(ingress, list) or not ingress:
-            return "Provide at least one ingress rule."
-        ports = ingress[0].get("ports", [])
-        ok_port = any((p.get("port") == 80 and p.get("protocol", "TCP") == "TCP") for p in ports if isinstance(ports, list))
-        if not ok_port:
-            return "Allow TCP port 80 in the ingress rule."
-        return None
-    except Exception:
-        return "Allow TCP port 80 to app=web pods."
-
-VALIDATORS = [
-    ("svc_selector", "Service selector mismatch", 
-     "The Service isn’t matching any pods. Fix the selector so it targets the app pods.\nWe’re looking for app=web under spec.selector.",
-     '{"kind":"Service","spec":{"selector":{"app":"web"}}}',
-     ["kind=Service", "spec.selector.app==web"], expect_service_selector),
-    ("cm_missing", "Missing ConfigMap key", 
-     "The app expects a welcome message at data.WELCOME. Provide a non-empty string.",
-     '{"kind":"ConfigMap","data":{"WELCOME":"hello team"}}',
-     ["kind=ConfigMap", "data.WELCOME non-empty"], expect_configmap_key),
-    ("live_bad", "Bad liveness probe path",
-     "Liveness probe keeps failing (404). Point it at the root path.",
-     '{"kind":"Deployment","spec":{"template":{"spec":{"containers":[{"name":"web","livenessProbe":{"httpGet":{"path":"/"}}}]}}}}',
-     ['kind=Deployment', 'containers[name="web"].livenessProbe.httpGet.path="/"'], expect_liveness_root),
-    ("oom_limits", "OOM from tiny memory limit",
-     "The app OOMs on requests. Increase the memory limit for container web.",
-     '{"kind":"Deployment","spec":{"template":{"spec":{"containers":[{"name":"web","resources":{"limits":{"memory":"128Mi"}}}]}}}}',
-     ['kind=Deployment', 'resources.limits.memory for "web" >= 128Mi'], expect_memory_limit),
-    ("image_typo", "Image tag typo",
-     "Pods are ImagePullBackOff due to a bad tag. Set a valid echo-server tag.",
-     '{"kind":"Deployment","spec":{"template":{"spec":{"containers":[{"name":"web","image":"ealen/echo-server:latest"}]}}}}',
-     ['kind=Deployment', 'image for "web" set to a valid tag'], expect_valid_image),
-    ("np_block", "NetworkPolicy blocks ingress",
-     "Nobody can reach the app. Add an ingress rule that allows TCP/80 to app=web pods.",
-     '{"kind":"NetworkPolicy","spec":{"podSelector":{"matchLabels":{"app":"web"}},"ingress":[{"ports":[{"port":80,"protocol":"TCP"}]}]}}',
-     ['kind=NetworkPolicy', 'podSelector matchLabels app=web', 'ingress allows TCP/80'], expect_np_ingress),
-]
-
-# ------------------ Persistence ------------------
-def load_state() -> State:
+def load_state() -> RootState:
     if os.path.exists(STATE_FILE):
         with open(STATE_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return State.from_json(data)
-    # default state
-    st = State()
-    default_teams = ["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot"]
-    for name in default_teams:
+            return RootState.from_json(json.load(f))
+    st = RootState()
+    for name in ["Alpha","Bravo","Charlie","Delta","Echo","Foxtrot"]:
         tid = name.lower()
         st.teams[tid] = Team(id=tid, name=name)
-        st.solved[tid] = []
-    for cid, title, desc, hint, checks, _ in VALIDATORS:
-        st.challenges[cid] = Challenge(id=cid, title=title, description=desc, hint=hint, checks=checks)
+        st.rnd.submissions[tid] = {}
+        st.rnd.scores[tid] = 0.0
+    st.questions = load_questions()
     save_state(st)
     return st
 
-def save_state(st: State) -> None:
+def save_state(st: RootState) -> None:
     tmp = STATE_FILE + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(st.to_json(), f, indent=2)
     os.replace(tmp, STATE_FILE)
 
-def get_board() -> List[dict]:
-    global STATE
-    st = STATE
-    total = len(st.challenges)
+def current_question(st: RootState) -> Optional[Question]:
+    if not st.questions:
+        return None
+    if st.rnd.qidx < 0 or st.rnd.qidx >= len(st.questions):
+        return None
+    return st.questions[st.rnd.qidx]
+
+def eval_answer(q: Question, ans: Answer) -> bool:
+    if q.kind == "single":
+        return ans.choice is not None and int(ans.choice) == int(q.answer)
+    if q.kind == "multi":
+        correct = set(q.answer or [])
+        got = set(ans.choices or [])
+        return got == correct
+    if q.kind == "short":
+        text = (ans.text or "").strip()
+        for rx in (q.answer or []):
+            if re.fullmatch(rx, text, flags=re.IGNORECASE):
+                return True
+        return False
+    return False
+
+def human_answer(q: Question) -> str:
+    if q.kind in ("single","multi"):
+        if not q.choices:
+            return ""
+        if q.kind == "single":
+            try:
+                idx = int(q.answer)
+                return f"{idx}: {q.choices[idx]}"
+            except Exception:
+                return str(q.answer)
+        else:
+            try:
+                idxs = [int(i) for i in (q.answer or [])]
+                return ", ".join([f"{i}: {q.choices[i]}" for i in idxs])
+            except Exception:
+                return str(q.answer)
+    else:
+        return " / ".join(q.answer or [])
+
+def board(st: RootState):
     rows = []
     for tid, team in st.teams.items():
-        solved = len(st.solved.get(tid, []))
+        subs = st.rnd.submissions.get(tid, {})
+        answered = len([i for i in subs if isinstance(subs[i], Answer)])
+        correct = len([i for i in subs if subs[i].correct is True])
         rows.append({
             "team": team,
-            "solved": solved,
-            "points": solved,
-            "last_solve": time.strftime("%H:%M:%S", time.localtime(st.solves_ts.get(tid, 0))) if st.solves_ts.get(tid) else None,
+            "points": round(st.rnd.scores.get(tid, 0.0), 2),
+            "answered": answered,
+            "correct": correct,
         })
-    rows.sort(key=lambda r: (-r["points"], st.solves_ts.get(r["team"].id, 0) or 0))
-    return rows, total
+    rows.sort(key=lambda r: (-r["points"], r["team"].name))
+    return rows
 
-# ------------------ Routes ------------------
+def is_local_request() -> bool:
+    ra = request.remote_addr or ""
+    return ra.startswith("127.") or ra == "::1" or ra == "localhost"
+
+def block_reset_response():
+    text = ("<h2>Uh huh! Someone's been caught trying to reset the game 🤭</h2>"
+            "<p>You have been reported to the P&C Team. "
+            "You're being paid for 365 days and still doing this? Bold strategy, Cotton!</p>"
+            "<p><em>Resets are restricted. Ask the facilitator if you truly need one.</em></p>")
+    resp = make_response(text, 403)
+    return resp
+
+def allowed_reset() -> bool:
+    # If admin token is configured, require it
+    if ADMIN_TOKEN:
+        token = request.form.get("admin_token") or request.headers.get("X-QUIZ-ADMIN","")
+        return token and token == ADMIN_TOKEN
+    # Otherwise, only allow from localhost
+    return is_local_request()
+
+# ---------------- Routes ----------------
 @APP.route("/")
 def index():
     with LOCK:
-        board, total = get_board()
-    return render_template("index.html", board=board, total=total)
+        st = STATE
+        b = board(st)
+    return render_template("index.html", board=b)
 
 @APP.route("/teams")
 def teams():
     with LOCK:
         st = STATE
-        total = len(st.challenges)
-        solved = {tid: len(s) for tid, s in st.solved.items()}
         teams = list(st.teams.values())
-    return render_template("teams.html", teams=teams, solved=solved, total=total)
+        scores = st.rnd.scores
+    return render_template("teams.html", teams=teams, scores=scores)
 
-@APP.route("/t/<team_id>")
-def team_detail(team_id):
+@APP.route("/t/<team_id>", methods=["GET"])
+def team_page(team_id):
     with LOCK:
         st = STATE
         team = st.teams.get(team_id)
         if not team: abort(404)
-        solved = set(st.solved.get(team_id, []))
-        chs = list(st.challenges.values())
-        if st.cfg.shuffle:
-            # deterministic shuffle per team
-            chs = sorted(chs, key=lambda c: hash((team_id, c.id)))
-    return render_template("team.html", team=team, challenges=chs, solved=solved)
+        q = current_question(st)
+        qidx = st.rnd.qidx
+        total = len(st.questions)
+        subs = st.rnd.submissions.get(team_id, {})
+        current = subs.get(qidx)
+        revealed = st.rnd.revealed
+        answer_h = human_answer(q) if (q and revealed) else None
+        submitted = len([1 for t, byq in st.rnd.submissions.items() if byq.get(qidx)])
+        deadline = st.rnd.deadline
+    return render_template("team.html", team=team, q=q, qidx=qidx, total=total, current=current, revealed=revealed, answer_human=answer_h, submitted=submitted, deadline=deadline, msg=None)
 
-@APP.route("/t/<team_id>/c/<challenge_id>", methods=["GET", "POST"])
-def challenge_detail(team_id, challenge_id):
+@APP.route("/t/<team_id>/submit", methods=["POST"])
+def submit_answer(team_id):
     with LOCK:
         st = STATE
         team = st.teams.get(team_id)
-        ch = st.challenges.get(challenge_id)
-        if not (team and ch): abort(404)
-        solved = challenge_id in st.solved.get(team_id, [])
-        show_hint = st.cfg.hints
-    error = ok = None
-    if request.method == "POST":
-        payload_raw = request.form.get("payload","").strip()
-        if not payload_raw:
-            error = "Please paste a JSON payload."
-        else:
-            try:
-                payload = json.loads(payload_raw)
-            except Exception as e:
-                error = f"Invalid JSON: {e}"
-            else:
-                # run validator
-                validator = next(v for v in VALIDATORS if v[0]==challenge_id)[5]
-                res = validator(payload)
-                if res is None:
-                    with LOCK:
-                        if challenge_id not in STATE.solved[team_id]:
-                            STATE.solved[team_id].append(challenge_id)
-                            STATE.solves_ts[team_id] = time.time()
-                            save_state(STATE)
-                    ok = "Nice! Challenge solved."
-                else:
-                    error = res
-    return render_template("challenge.html", team=team, ch=ch, solved=solved, error=error, ok=ok, show_hint=show_hint)
+        if not team: abort(404)
+        q = current_question(st)
+        if not q: abort(400)
+        if st.rnd.revealed:
+            return redirect(url_for('team_page', team_id=team_id))
+        ans = Answer()
+        if q.kind == "single":
+            choice = request.form.get("choice")
+            ans.choice = int(choice) if choice is not None else None
+        elif q.kind == "multi":
+            choices = request.form.getlist("choices")
+            ans.choices = [int(c) for c in choices]
+        elif q.kind == "short":
+            ans.text = request.form.get("text","").strip()
+        st.rnd.submissions.setdefault(team_id, {})[st.rnd.qidx] = ans
+        save_state(st)
+    return redirect(url_for('team_page', team_id=team_id))
 
-@APP.route("/facilitator", methods=["GET", "POST"])
+@APP.route("/facilitator", methods=["GET","POST"])
 def facilitator():
-    global STATE
     with LOCK:
+        st = STATE
+        blocked = False
         if request.method == "POST":
-            action = request.form.get("action","save")
-            shuffle = bool(request.form.get("shuffle"))
-            hints = bool(request.form.get("hints"))
-            if action == "save":
-                STATE.cfg.shuffle = shuffle
-                STATE.cfg.hints = hints
-            elif action == "reset_solved":
-                for tid in STATE.solved:
-                    STATE.solved[tid] = []
-                    STATE.solves_ts[tid] = 0
-            elif action == "reset_all":
-                if os.path.exists(STATE_FILE):
-                    os.remove(STATE_FILE)
-                STATE = load_state()
-            save_state(STATE)
-        board, total = get_board()
-        cfg = STATE.cfg
-    return render_template("facilitator.html", board=board, total=total, cfg=cfg)
+            action = request.form.get("action")
+            st.rnd.neg_mark = bool(request.form.get("neg")) or st.rnd.neg_mark
+            if action == "start_timer":
+                try:
+                    st.rnd.timer_secs = int(request.form.get("timer", st.rnd.timer_secs))
+                except: pass
+                st.rnd.deadline = time.time() + st.rnd.timer_secs
+            elif action == "shuffle":
+                import random
+                random.shuffle(st.questions)
+                st.rnd.qidx = 0
+                st.rnd.revealed = False
+                st.rnd.deadline = None
+                for tid in st.teams:
+                    st.rnd.submissions[tid] = {}
+            elif action == "prev":
+                st.rnd.qidx = max(0, st.rnd.qidx - 1)
+                st.rnd.revealed = False
+                st.rnd.deadline = None
+            elif action == "next":
+                st.rnd.qidx = min(len(st.questions)-1, st.rnd.qidx + 1)
+                st.rnd.revealed = False
+                st.rnd.deadline = None
+            elif action in ("reset_round","reset_all","reveal"):
+                # reveal is allowed; resets are protected
+                if action in ("reset_round","reset_all") and not allowed_reset():
+                    blocked = True
+                else:
+                    if action == "reveal":
+                        q = current_question(st)
+                        if q:
+                            for tid in st.teams:
+                                ans = st.rnd.submissions.get(tid, {}).get(st.rnd.qidx)
+                                if not ans:
+                                    continue
+                                correct = eval_answer(q, ans)
+                                ans.correct = bool(correct)
+                                if correct:
+                                    delta = 1.0 if q.kind == "single" else 2.0
+                                    st.rnd.scores[tid] = st.rnd.scores.get(tid, 0.0) + delta
+                                else:
+                                    if st.rnd.neg_mark and ((q.kind=="single" and ans.choice is not None) or (q.kind=="multi" and (ans.choices or [])) or (q.kind=="short" and (ans.text or ""))):
+                                        st.rnd.scores[tid] = st.rnd.scores.get(tid, 0.0) - 0.5
+                            st.rnd.revealed = True
+                            st.rnd.deadline = None
+                    elif action == "reset_round":
+                        st.rnd.revealed = False
+                        st.rnd.deadline = None
+                        for tid in st.teams:
+                            st.rnd.submissions[tid] = {}
+                    elif action == "reset_all":
+                        for tid in st.teams:
+                            st.rnd.submissions[tid] = {}
+                            st.rnd.scores[tid] = 0.0
+                        st.rnd.qidx = 0
+                        st.rnd.revealed = False
+                        st.rnd.deadline = None
+            save_state(st)
+        q = current_question(st)
+        qidx = st.rnd.qidx
+        total = len(st.questions)
+        subs = []
+        for tid, team in st.teams.items():
+            ans = st.rnd.submissions.get(tid, {}).get(qidx)
+            if q and ans:
+                if q.kind=="single":
+                    atext = q.choices[ans.choice] if ans.choice is not None and 0 <= ans.choice < len(q.choices) else "(no answer)"
+                elif q.kind=="multi":
+                    atext = ", ".join([q.choices[i] for i in (ans.choices or []) if 0 <= i < len(q.choices)]) if (ans.choices) else "(no answer)"
+                else:
+                    atext = ans.text or "(no answer)"
+                correct = ans.correct if st.rnd.revealed else None
+            else:
+                atext = "—"
+                correct = None
+            subs.append({"team": team, "answer": atext, "correct": correct})
+        answer_human = human_answer(q) if q else None
+        state = st.rnd
+        b = board(st)
+        admin_required = True if ADMIN_TOKEN else False
+    if request.method == "POST" and 'blocked' in locals() and blocked:
+        return block_reset_response()
+    return render_template("facilitator.html", q=q, qidx=qidx, total=total, subs=subs, answer_human=answer_human, state=state, board=b, admin_required=admin_required)
+
+@APP.route("/play")
+def play_all():
+    with LOCK:
+        st = STATE
+        q = current_question(st)
+        qidx = st.rnd.qidx
+        revealed = st.rnd.revealed
+        answer_human = human_answer(q) if (q and revealed) else None
+    return render_template("play_all.html", q=q, qidx=qidx, revealed=revealed, answer_human=answer_human)
 
 def main():
     global STATE
