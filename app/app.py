@@ -6,6 +6,8 @@ from typing import Dict, List, Optional, Any
 from flask import Flask, render_template, request, redirect, url_for, abort, make_response
 
 APP = Flask(__name__)
+# expose Python's enumerate to Jinja templates
+APP.jinja_env.globals.update(enumerate=enumerate)
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 os.makedirs(DATA_DIR, exist_ok=True)
