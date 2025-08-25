@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="grid">
+  <div class="card">
+    <h3>Facilitator</h3>
+    <form method="post" action="{{ url_for('facilitator') }}">
+      <label><input type="checkbox" name="shuffle" {% if cfg.shuffle %}checked{% endif %}/> Shuffle challenge order per team</label><br/>
+      <label><input type="checkbox" name="hints" {% if cfg.hints %}checked{% endif %}/> Show hints to teams</label><br/>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="btn" name="action" value="save">Save Settings</button>
+        <button class="btn secondary" name="action" value="reset_solved">Reset Solved (all teams)</button>
+        <button class="btn danger" name="action" value="reset_all" onclick="return confirm('Reset EVERYTHING? Scores and settings will be cleared.')">Full Reset</button>
+      </div>
+    </form>
+  </div>
+  <div class="card">
+    <h3>Live Scores</h3>
+    <table>
+      <tr><th>Team</th><th>Points</th><th>Progress</th></tr>
+      {% for row in board %}
+      <tr>
+        <td><a href="{{ url_for('team_detail', team_id=row.team.id) }}">{{ row.team.name }}</a></td>
+        <td><strong>{{ row.points }}</strong></td>
+        <td>{{ row.solved }}/{{ total }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+{% endblock %}

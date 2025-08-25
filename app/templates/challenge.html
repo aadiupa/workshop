@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="grid">
+  <div class="card">
+    <h3>{{ ch.title }}</h3>
+    <p>{{ ch.description }}</p>
+    {% if solved %}
+      <p class="success"><strong>✔ Already solved by your team.</strong></p>
+    {% endif %}
+    {% if show_hint %}
+    <details>
+      <summary>Hint (click to expand)</summary>
+      <pre><code>{{ ch.hint }}</code></pre>
+    </details>
+    {% endif %}
+    <form method="post" action="{{ url_for('challenge_detail', team_id=team.id, challenge_id=ch.id) }}">
+      <label for="payload">Your JSON patch</label>
+      <textarea id="payload" name="payload" rows="10" placeholder='{{ ch.hint|e }}'></textarea>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="btn" type="submit">Submit</button>
+        <a class="btn secondary" href="{{ url_for('team_detail', team_id=team.id) }}">Back to team</a>
+      </div>
+      {% if error %}
+        <p class="error">{{ error }}</p>
+      {% endif %}
+      {% if ok %}
+        <p class="success">{{ ok }}</p>
+      {% endif %}
+    </form>
+  </div>
+  <div class="card">
+    <h3>What we’re checking</h3>
+    <ul>
+      {% for i in ch.checks %}
+        <li class="small">{{ i }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+<script>
+document.getElementById('payload').addEventListener('keydown', function(e){
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    this.form.submit();
+  }
+});
+</script>
+{% endblock %}

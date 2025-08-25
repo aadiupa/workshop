@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h3>Teams</h3>
+  <table>
+    <tr><th>Team</th><th>Link</th><th>Solved</th></tr>
+    {% for t in teams %}
+      <tr>
+        <td>{{ t.name }}</td>
+        <td><a href="{{ url_for('team_detail', team_id=t.id) }}">Open</a></td>
+        <td>{{ solved.get(t.id,0) }}/{{ total }}</td>
+      </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

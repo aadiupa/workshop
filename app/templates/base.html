@@ -1,0 +1,22 @@
+{% macro nav() -%}
+<div class="header">
+  <div class="h1">🛠️ Fix‑It Chaos Lab</div>
+  <div><a href="{{ url_for('index') }}">Scoreboard</a> · <a href="{{ url_for('teams') }}">Teams</a> · <a href="{{ url_for('facilitator') }}">Facilitator</a></div>
+</div>
+{%- endmacro %}
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>{{ title or "Fix‑It Chaos Lab" }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"/>
+  </head>
+  <body>
+    <div class="wrap">
+      {{ nav() }}
+      {% block content %}{% endblock %}
+      <div class="footer">Made for a quick, fun ops exercise. This is a simulation — no real clusters harmed.</div>
+    </div>
+  </body>
+</html>

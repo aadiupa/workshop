@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="grid">
+  <div class="card">
+    <h3>Team: {{ team.name }}</h3>
+    <p class="small">Share this page URL with your teammates.</p>
+    <table>
+      <tr><th>#</th><th>Challenge</th><th>Status</th></tr>
+      {% for c in challenges %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td><a href="{{ url_for('challenge_detail', team_id=team.id, challenge_id=c.id) }}">{{ c.title }}</a></td>
+        <td>{% if c.id in solved %}<span class="success">Solved</span>{% else %}<span class="error">Broken</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  <div class="card">
+    <h3>Tips</h3>
+    <ul>
+      <li>We only check the parts that matter; extra fields are ignored.</li>
+      <li>JSON only (no YAML). If you need help, copy the hint and edit it.</li>
+      <li>Take turns. Talk through your fix before you submit.</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}
