@@ -6,6 +6,8 @@ from typing import Dict, List, Optional, Any
 from flask import Flask, render_template, request, redirect, url_for, abort
 
 APP = Flask(__name__)
+# expose Python's enumerate to Jinja templates
+APP.jinja_env.globals.update(enumerate=enumerate)
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -311,7 +313,7 @@ def main():
     global STATE
     with LOCK:
         STATE = load_state()
-    port = int(os.environ.get("PORT", "5000"))
+    port = int(os.environ.get("PORT", "5001"))
     APP.run(host="0.0.0.0", port=port, debug=False)
 
 if __name__ == "__main__":
