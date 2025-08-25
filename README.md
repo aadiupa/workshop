@@ -17,11 +17,11 @@ You get a live scoreboard.
    source .venv/bin/activate  # Windows: .venv\Scripts\activate
    pip install -r requirements.txt
    ```
-3) Run the app:
+3) Run the app (defaults to port 5001; set `PORT` to change):
    ```bash
-   python -m app
+   python -m app                # or: PORT=8000 python -m app
    ```
-4) Open http://localhost:5000  (You’ll see the scoreboard and a “Facilitator” panel.)
+4) Open http://localhost:5001  (replace 5001 if you set a different `PORT`)
 
 ### Optional: share a public link
 If you want remote folks to join, expose it with Cloudflare Tunnel:
@@ -30,7 +30,7 @@ If you want remote folks to join, expose it with Cloudflare Tunnel:
 cloudflared --version
 
 # 2) Run a quick ad-hoc tunnel
-cloudflared tunnel --url http://localhost:5000
+cloudflared tunnel --url http://localhost:5001   # adjust if you changed `PORT`
 ```
 It prints a public URL (e.g., https://something.trycloudflare.com). Share that URL with attendees.
 
